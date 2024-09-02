@@ -1,0 +1,9 @@
+[package]
+name = "ckb-adler32"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ckb-std = "0.15.1"
+adler = { version = "1", default-features = false }
+faster-hex = { version = "0.9", default-features = false }
