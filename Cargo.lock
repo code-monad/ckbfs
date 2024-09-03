@@ -135,7 +135,7 @@ dependencies = [
  "ckb-crypto",
  "ckb-dao-utils",
  "ckb-error",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-jsonrpc-types",
  "ckb-pow",
  "ckb-rational",
@@ -254,7 +254,7 @@ dependencies = [
  "cfg-if",
  "ckb-error",
  "ckb-fixed-hash",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-occupied-capacity",
  "molecule",
  "numext-fixed-uint",
@@ -265,6 +265,16 @@ name = "ckb-hash"
 version = "0.112.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25af660fc8746f7c756444e6aa47ede9a874206563b6a1ce1b230a5b86519392"
+dependencies = [
+ "blake2b-ref",
+ "blake2b-rs",
+]
+
+[[package]]
+name = "ckb-hash"
+version = "0.117.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5231fff400578e6a6d9c9758138a6cfb190d1acbd28f1b5d40e7fcb13f133e9a"
 dependencies = [
  "blake2b-ref",
  "blake2b-rs",
@@ -349,7 +359,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5895b4799fbb7e537ef0a778493b8f8678284c2bb20b476edce3f3375d1c4aa1"
 dependencies = [
  "byteorder",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-types",
  "eaglesong",
  "log",
@@ -390,7 +400,7 @@ dependencies = [
  "byteorder",
  "ckb-chain-spec",
  "ckb-error",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-logger",
  "ckb-traits",
  "ckb-types",
@@ -440,7 +450,7 @@ dependencies = [
  "ckb-chain-spec",
  "ckb-crypto",
  "ckb-error",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-jsonrpc-types",
  "ckb-mock-tx-types",
  "ckb-resource",
@@ -474,7 +484,7 @@ dependencies = [
  "ckb-error",
  "ckb-fixed-hash",
  "ckb-gen-types",
- "ckb-hash",
+ "ckb-hash 0.112.1",
  "ckb-merkle-mountain-range",
  "ckb-occupied-capacity",
  "ckb-rational",
@@ -560,7 +570,19 @@ dependencies = [
 name = "ckbfs"
 version = "0.1.0"
 dependencies = [
+ "blake2b-ref",
+ "ckb-hash 0.117.0",
  "ckb-std",
+ "ckbfs-types",
+ "hex",
+ "molecule",
+]
+
+[[package]]
+name = "ckbfs-types"
+version = "0.1.0"
+dependencies = [
+ "molecule",
 ]
 
 [[package]]
@@ -716,6 +738,12 @@ checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "includedir"
