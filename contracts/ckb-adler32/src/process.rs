@@ -9,7 +9,7 @@ use crate::ckb_arg_to_num;
 use crate::error::CKBFSError;
 use crate::utils::*;
 
-pub const CKBFS_WITNESSES_OFFSET: usize = 5;
+pub const CKBFS_WITNESSES_OFFSET: usize = 6;
 
 #[no_mangle]
 pub fn load_witnesses_for_ckbfs(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
@@ -63,7 +63,7 @@ pub fn process_ckbfs_validate(args: &[ckb_std::env::Arg]) -> i8 {
     }
 
     let witnesses_index = ckb_arg_to_num!(args[1].borrow(), u32);
-    let witnesses = load_witnesses_for_ckbfs(witnesses_index as usize, Source::Input).expect(
+    let witnesses = load_witnesses_for_ckbfs(witnesses_index as usize, Source::Output).expect(
         &alloc::format!("CKB-Adler32: Failed to load witness {witnesses_index}"),
     );
 

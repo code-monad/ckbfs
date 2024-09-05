@@ -3,11 +3,11 @@ use ckb_std::error::SysError;
 /// Error
 #[repr(i8)]
 pub enum CKBFSError {
-    IndexOutOfBound = 1,
-    ItemMissing = 2,
-    LengthNotEnough = 3,
-    Encoding = 4,
-    Unknown = 100,
+    IndexOutOfBound = -1,
+    ItemMissing = -2,
+    LengthNotEnough = -3,
+    Encoding = -4,
+    Unknown = -100,
     InvalidInitialData = 101,
     InvalidTypeId = 102,
     DeletionForbidden = 103,     // we can  not delete a CKBFS cell

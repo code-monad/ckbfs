@@ -1,5 +1,6 @@
-use alloc::{ffi::CString, string::String, vec, vec::Vec};
+use alloc::{ffi::CString, format, vec, vec::Vec};
 use blake2b_ref::Blake2bBuilder;
+use ckb_std::high_level::encode_hex;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::core::ScriptHashType,
@@ -9,19 +10,24 @@ use ckb_std::{
         load_script, load_script_hash, QueryIter,
     },
 };
-
 use core::fmt::Write;
+
 use molecule::prelude::Entity;
 
 use crate::{error::CKBFSError, hash};
 use ckbfs_types::CKBFSData;
 
 pub fn encode_hex_0x(data: &[u8]) -> CString {
-    let mut s = String::with_capacity(data.len() * 2);
+    let mut s = alloc::string::String::with_capacity(data.len() * 2 + 2);
     write!(&mut s, "0x").unwrap();
     for &b in data {
         write!(&mut s, "{:02x}", b).unwrap();
     }
+    CString::new(s).unwrap()
+}
+
+pub fn u8_to_cstring(number: u8) -> CString {
+    let s = format!("0x{}", encode_hex(&number.to_le_bytes()).to_str().unwrap());
     CString::new(s).unwrap()
 }
 
@@ -74,12 +80,13 @@ pub fn validate_by_spawn(
         return Err(CKBFSError::NoChecksumHasherFound);
     }
 
-    let mode = vec![b'1', 0];
-    let witnesses_index_arg = vec![b'0' + witness_index as u8, 0];
-    let checksum_arg = encode_hex_0x(&checksum.to_be_bytes());
+    let mode = u8_to_cstring(1u8);
+    let witness_index = witness_index as u32;
+    let witness_index = encode_hex_0x(&witness_index.to_le_bytes());
+    let checksum_arg = encode_hex_0x(&checksum.to_le_bytes());
     let exec_args = vec![
-        core::ffi::CStr::from_bytes_with_nul(mode.as_slice()).unwrap(),
-        core::ffi::CStr::from_bytes_with_nul(witnesses_index_arg.as_slice()).unwrap(),
+        mode.as_c_str(),
+        witness_index.as_c_str(),
         checksum_arg.as_c_str(),
     ];
 
@@ -102,13 +109,14 @@ fn validate_by_spawn_with_recover(
         return Err(CKBFSError::NoChecksumHasherFound);
     }
 
-    let mode = vec![b'1', 0];
-    let witnesses_index_arg = vec![b'0' + witness_index as u8, 0];
-    let checksum_arg = encode_hex_0x(&checksum.to_be_bytes());
-    let recover_arg = encode_hex_0x(&recover.to_be_bytes());
+    let mode = u8_to_cstring(1u8);
+    let witness_index = witness_index as u32;
+    let witness_index = encode_hex_0x(&witness_index.to_le_bytes());
+    let checksum_arg = encode_hex_0x(&checksum.to_le_bytes());
+    let recover_arg = encode_hex_0x(&recover.to_le_bytes());
     let exec_args = vec![
-        core::ffi::CStr::from_bytes_with_nul(mode.as_slice()).unwrap(),
-        core::ffi::CStr::from_bytes_with_nul(witnesses_index_arg.as_slice()).unwrap(),
+        mode.as_c_str(),
+        witness_index.as_c_str(),
         checksum_arg.as_c_str(),
         recover_arg.as_c_str(),
     ];
@@ -296,7 +304,7 @@ pub fn main() -> Result<(), CKBFSError> {
     match (ckbfs_in_input, ckbfs_in_output.len()) {
         (None, 1) => {
             // creation
-            process_creation(2)?
+            process_creation(ckbfs_in_output[0])?
         }
         (Some(_), 0) => {
             // destroy, forbidden

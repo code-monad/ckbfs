@@ -21,6 +21,7 @@ mod utils;
 use crate::error::CKBFSError;
 use crate::process::*;
 use crate::utils::*;
+use alloc::vec;
 use ckb_std::high_level::encode_hex;
 
 pub fn program_entry() -> i8 {
@@ -41,11 +42,7 @@ pub fn program_entry() -> i8 {
         // complex && mode specify mode
         _ => {
             // check arg count first
-            let mode_arg = args[0]
-                .to_str()
-                .expect("CKB-Adler32:Failed to extract first arg!")
-                .parse::<u8>()
-                .expect("CKB-Adler32:Failed to parse first arg as number!");
+            let mode_arg = ckb_arg_to_num!(args[0], u8);
             // arg rules should be like:
             // [<MODE>, ...<OTHER ARGS>]
             // which means, first arg should always be mode
