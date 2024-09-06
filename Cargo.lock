@@ -581,6 +581,8 @@ dependencies = [
 [[package]]
 name = "ckbfs-types"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a8b51f870e8b414c162fd2b01d801465ca3c8528d8b218e447f559486a84cd"
 dependencies = [
  "molecule",
 ]
