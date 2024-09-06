@@ -16,6 +16,7 @@ pub enum CKBFSError {
     NoChecksumHasherFound = 106, // no valid checksum binary founded in deps
     DuplicatedOutputs = 107,     // there can not be two same ckbfs cell in output
     InvalidAppend = 108,         // append data updates not meet
+    InvalidTransfer = 109,       // transfer operation data updates not meet
 }
 
 impl From<SysError> for CKBFSError {
