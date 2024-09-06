@@ -1,5 +1,8 @@
 # CKBFS - A CKB Witnesses File Storage Contract
 
+## Protocol Standard
+Check [RFC.md](RFC.md) for detailed standard.
+
 
 ## License
 
