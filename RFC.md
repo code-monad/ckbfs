@@ -119,7 +119,7 @@ Outputs:
 
 Publish operation must satisfy following rule:
 
-- Rule 6: in a publish operation, checksum must be equal with `hash(Witnesses[index])`.
+- Rule 9: in a publish operation, checksum must be equal with `hash(Witnesses[index])`.
 
 ---
 
@@ -160,10 +160,10 @@ Outputs:
       args: 32 bytes type_id, (...)
 ```
 
-- Rule 7: backlinks field of a CKBFS cell can only be appended. Once allocated, all records in the vector can not be modified.
-- Rule 8: new checksum of updated CKBFS cell should be equal to:  `hasher.recover_from(old_checksum).update(new_content_bytes)`
-- Rule 9: `content-type`, `filename`, and Type args of a CKBFS cell CAN NOT be updated in ANY condition
-- Rule 10: in an append operation, Output CKBFS Cell’s `index` can not be `null`
+- Rule 10: backlinks field of a CKBFS cell can only be appended. Once allocated, all records in the vector can not be modified.
+- Rule 11: new checksum of updated CKBFS cell should be equal to:  `hasher.recover_from(old_checksum).update(new_content_bytes)`
+- Rule 12: `content-type`, `filename`, and Type args of a CKBFS cell CAN NOT be updated in ANY condition
+- Rule 13: in an append operation, Output CKBFS Cell’s `index` can not be `null`
 
 ---
 
@@ -206,9 +206,9 @@ Outputs:
       <USER_DEFINED>
 ```
 
-- Rule 10: in a transfer operation, Output CKBFS Cell’s `index` must be null
-- Rule 11: if Input CKBFS Cell’s backlinks is empty, then output’s backlink should be append following Rule 7. Otherwise, the backlinks should not be updated
-- Rule 12: in a transfer operation, `checksum` CAN NOT be updated
+- Rule 14: in a transfer operation, Output CKBFS Cell’s `index` must be null
+- Rule 15: if Input CKBFS Cell’s backlinks is empty, then output’s backlink should be append following Rule 10. Otherwise, the backlinks should not be updated
+- Rule 16: in a transfer operation, `checksum` CAN NOT be updated
 
 ---
 
