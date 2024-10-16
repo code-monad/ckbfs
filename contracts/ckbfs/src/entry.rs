@@ -157,7 +157,7 @@ fn process_creation(index: usize) -> Result<(), CKBFSError> {
 
     let mut recover = None;
 
-    // if initial backlink is not empty, then it must
+    // if initial backlink is not empty, then it must contians a valid celldep
     if data.backlinks().len() != 0 {
         let ref_cell_index = QueryIter::new(load_cell_type, Source::CellDep)
             .enumerate()
