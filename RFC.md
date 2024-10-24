@@ -33,7 +33,7 @@ A CKBFS cell in should looks like following:
 Data:
   content_type: Bytes # String Bytes
   filename: Bytes # String Bytes
-  index: Uint32Opt # referenced witnesses index.
+  indexes: Vec<Uint32> # referenced witnesses index.
   checksum: Uint32 # Adler32 checksum
   backlinks: Vec<BackLink>
 
@@ -52,6 +52,7 @@ The following rules should be met in a CKBFS cell:
 - Rule 3: if backlinks(see definition below) of a CKBFS cell is not empty, it means file was stored across blocks.
 - Rule 4: if `hasher_code_hash` is specified, then it will use hasher binary from CellDeps that matches `code_hash`, with same input parameter.
 - Rule 5: Once created, a CKBFS cell can only be updated/transfered, which means it can not be destroyed.
+- UPDATES IN VERSION 2: `indexes` is a vector of witness indexes, stored CKBFS structured contents in splited witnesses.
 
 ---
 
@@ -64,7 +65,7 @@ BackLink stands for the prefix part of a living CKBFS cell.  The strategy of CKB
 ```yaml
 BackLink:
   tx_hash: Bytes,
-  index: Uint32,
+  indexes: Vec<Uint32>,
   checksum: Uint32,
 ```
 
@@ -72,7 +73,7 @@ BackLink:
 
 ### Witnesses
 
-File contents are stored in witnesses. 
+File contents are stored in witnesses. In a single transaction, witnesses can be splitted into multiple parts and concat together while verification. 
 
 ```yaml
 Witnesses:
@@ -84,6 +85,7 @@ The following rules should be met for witnesses used in CKBFS:
 - Rule 6: The first 5 bytes must be UTF8 coded string bytes of `CKBFS`, which should be: `0x434b424653`
 - Rule 7: The 6th byte of witnesses must be the version of CKBFS protocol, which should be: `0x00`.
 - Rule 8: File contents bytes are stored from 7th byte. Checksum hasher should also take bytes from `[7…]`.
+- UPDATES IN VERSION 2: Every parts of the splitted content stored in witnesses must follow Rule 6 to Rule 8.
 
 ---
 
@@ -108,7 +110,7 @@ Outputs:
     Data:
       content-type: string
       filename: string
-      index: uint32
+      indexes: vec<uint32>
       checksum: uint32
       backlinks: empty_vec
     Type:
@@ -139,7 +141,7 @@ Inputs:
     Data:
       content-type: string
       filename: string
-      index: uint32
+      indexes: vec<uint32>
       checksum: uint32
       backlinks: empty_vec
     Type:
@@ -152,7 +154,7 @@ Outputs:
     Data:
       content-type: string
       filename: string
-      index: uint32
+      indexes: vec<uint32>
       checksum: uint32 # updated checksum
       backlinks: vec<BackLink>
     Type:
@@ -163,7 +165,7 @@ Outputs:
 - Rule 10: backlinks field of a CKBFS cell can only be appended. Once allocated, all records in the vector can not be modified.
 - Rule 11: new checksum of updated CKBFS cell should be equal to:  `hasher.recover_from(old_checksum).update(new_content_bytes)`
 - Rule 12: `content-type`, `filename`, and Type args of a CKBFS cell CAN NOT be updated in ANY condition
-- Rule 13: in an append operation, Output CKBFS Cell’s `index` can not be `null`
+- Rule 13: in an append operation, Output CKBFS Cell’s `indexes` can not be `empty`
 
 ---
 
@@ -206,7 +208,7 @@ Outputs:
       <USER_DEFINED>
 ```
 
-- Rule 14: in a transfer operation, Output CKBFS Cell’s `index` must be null
+- Rule 14: in a transfer operation, Output CKBFS Cell’s `indexes` must be empty
 - Rule 15: if Input CKBFS Cell’s backlinks is empty, then output’s backlink should be append following Rule 10. Otherwise, the backlinks should not be updated
 - Rule 16: in a transfer operation, `checksum` CAN NOT be updated
 
@@ -222,17 +224,18 @@ Here’s molecule definitions of CKBFS data structures
 vector Bytes <byte>;
 option BytesOpt (Bytes);
 option Uint32Opt (Uint32);
+vector Indexes <index>;
 
 table BackLink {
   tx_hash: Bytes,
-  index: Uint32,
+  index: Indexes,
   checksum: Uint32,
 }
 
 vector BackLinks <BackLink>;
 
 table CKBFSData {
-  index: Uint32Opt,
+  index: Indexes,
   checksum: Uint32,
   content_type: Bytes,
   filename: Bytes,
@@ -286,7 +289,7 @@ CKBFS_CELL:
   Data:
     content-type: string
     filename: string
-    index: 0x0
+    indexes: [0x0]
     checksum: 0xFE02EA11
     backlinks: [BACKLINK_1, BACKLINK_2, ...]
   Type:
@@ -305,7 +308,7 @@ CellDeps:
 	  Data:
 	    content-type: string
 	    filename: string
-	    index: 0x0
+	    indexes: [0x0]
 	    checksum: 0xFE02EA11
 	    backlinks: [BACKLINK_1, BACKLINK_2, ...]
 	  Type:
@@ -326,7 +329,7 @@ Outputs:
     Data:
       content-type: string
       filename: string
-      index: uint32
+      indexes: [uint32]
       checksum: UPDATED_CHECKSUM
       backlinks: [BACKLINK_1, BACKLINK_2, ...]
     Type:
