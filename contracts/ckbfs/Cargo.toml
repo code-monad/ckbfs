@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ckb-std = { version = "0.15.1" }
 blake2b-ref = { version = "0.3", default-features = false }
-ckbfs-types = { version = "0.1", default-features = false }
+ckbfs-types = { version = "0.2.1", default-features = false }
 molecule = { version = "0.7.5", default-features = false }
 faster-hex = { version = "0.9", default-features = false }
 

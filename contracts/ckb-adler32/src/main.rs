@@ -11,7 +11,7 @@ use ckb_std::default_alloc;
 ckb_std::entry!(program_entry);
 
 #[cfg(not(test))]
-default_alloc!();
+default_alloc!(1 * 1024, 800 * 1024, 64);
 
 mod error;
 mod macros;
