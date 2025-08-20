@@ -58,6 +58,9 @@ pub fn program_entry() -> i8 {
                 // 2 - (for contract) manual validate mode; load data from where you want; args should be: [SOURCE, INDEX, OFFSET, EXPECTED_CHECKSUM, RECOVER_CHECKSUM(OPTIONAL)]
                 2 => process_manual_validate(args),
 
+                // 3 - (for contract) ckbfs v3 validate mode; args should be: [FIRST_WITNESS_INDEX, EXPECT_CHECKSUM]
+                3 => process_ckbfs_validate_v3(args),
+
                 _ => return CKBFSError::Unknown as i8, // unknown args
             };
         }
