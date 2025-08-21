@@ -1277,6 +1277,7 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "ckb-testtool",
+ "ckbfs-types",
  "serde_json",
 ]
 

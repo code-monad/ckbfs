@@ -1,7 +1,8 @@
 use alloc::{ffi::CString, format, vec, vec::Vec};
 use blake2b_ref::Blake2bBuilder;
-use ckb_std::high_level::encode_hex;
+use ckb_std::high_level::{encode_hex, load_input_out_point, load_witness};
 use ckb_std::{
+    debug,
     ckb_constants::Source,
     ckb_types::core::ScriptHashType,
     high_level::{
@@ -136,13 +137,38 @@ fn unpack_type_args(args: &[u8]) -> Result<([u8; 32], Option<&[u8; 32]>), CKBFSE
     return Ok((type_id, checksum_code_hash));
 }
 
+fn validate_witness_previous_position(
+    witness_index: usize,
+    expected_tx_hash: &[u8],
+    expected_witness_index: u32,
+) -> Result<(), CKBFSError> {
+    let head_witness = load_witness(witness_index, Source::Output)?;
+    
+    // Parse Head Witness according to RFC v3 specification
+    if head_witness.len() < 50 {
+        return Err(CKBFSError::LengthNotEnough);
+    }
+    
+    // Extract previous TX hash (bytes 6-37) and witness index (bytes 38-41)
+    let witness_previous_tx_hash: [u8; 32] = head_witness[6..38].try_into().unwrap();
+    let witness_previous_index = u32::from_le_bytes(head_witness[38..42].try_into().unwrap());
+    
+    // Validate previous position matches expected values
+    if witness_previous_tx_hash != expected_tx_hash || witness_previous_index != expected_witness_index {
+        return Err(CKBFSError::InvalidPreviousPosition);
+    }
+    
+    Ok(())
+}
+
 fn process_creation(index: usize) -> Result<(), CKBFSError> {
+    debug!("process_creation!");
     let data = load_ckbfs_raw_data(index, Source::Output)?;
 
     let type_script_args = load_type_args(index, Source::Output);
     let (type_id, checksum_code_hash) = unpack_type_args(&type_script_args)?;
 
-    // vallidate unique id
+    // validate unique id
     if !validate_type_id(&type_id, index) {
         return Err(CKBFSError::InvalidTypeId);
     }
@@ -150,7 +176,11 @@ fn process_creation(index: usize) -> Result<(), CKBFSError> {
     let checksum = u32::from_le_bytes(data.checksum().as_slice().try_into().unwrap());
     let witness_index = u32::from_le_bytes(data.index().as_slice().try_into().unwrap());
 
+    // For creation, previous position should be all zeros
+    validate_witness_previous_position(witness_index as usize, &[0u8; 32], 0)?;
+
     if !validate_by_spawn_v3(witness_index, checksum, checksum_code_hash)? {
+        debug!("validate_by_spawn_v3 failed!");
         return Err(CKBFSError::ChecksumMismatch);
     }
 
@@ -161,38 +191,46 @@ fn process_update(input_index: usize, output_index: usize) -> Result<(), CKBFSEr
     let input_data = load_ckbfs_raw_data(input_index, Source::Input)?;
     let output_data = load_ckbfs_raw_data(output_index, Source::Output)?;
 
+    let previous_output = load_input_out_point(input_index, Source::Input)?;
+
     // Rule 14: content-type, filename, and Type args cannot be changed
-    if input_data.content_type().as_slice()[..] != output_data.content_type().as_slice()[..] {
+    if input_data.content_type().as_slice() != output_data.content_type().as_slice() {
         return Err(CKBFSError::InvalidFieldUpdate);
     }
 
-    if input_data.filename().as_slice()[..] != output_data.filename().as_slice()[..] {
+    if input_data.filename().as_slice() != output_data.filename().as_slice() {
         return Err(CKBFSError::InvalidFieldUpdate);
     }
 
     // Validate that Type script args (including TypeID) are unchanged
     let input_type_args = load_type_args(input_index, Source::Input);
     let output_type_args = load_type_args(output_index, Source::Output);
-    if input_type_args[..] != output_type_args[..] {
+    if input_type_args != output_type_args {
         return Err(CKBFSError::InvalidFieldUpdate);
     }
+
+    let previous_tx_hash = previous_output.tx_hash();
+    let previous_witness_index = u32::from_le_bytes(input_data.index().as_slice().try_into().unwrap());
+    let output_witness_index = u32::from_le_bytes(output_data.index().as_slice().try_into().unwrap());
+
+    // Validate witness previous position
+    validate_witness_previous_position(output_witness_index as usize, previous_tx_hash.as_slice(), previous_witness_index)?;
 
     let type_script_args = load_script()?.args();
     let (_, checksum_code_hash) = unpack_type_args(type_script_args.as_slice())?;
     
     let input_checksum = u32::from_le_bytes(input_data.checksum().as_slice().try_into().unwrap());
     let output_checksum = u32::from_le_bytes(output_data.checksum().as_slice().try_into().unwrap());
-    let output_index_value = u32::from_le_bytes(output_data.index().as_slice().try_into().unwrap());
 
     // Check if this is a transfer operation
     if input_checksum == output_checksum {
         // Transfer operation: Rule 16 - checksum cannot be updated
         // Rule 15: Head witness should not contain content part bytes (only backlink info)
-        return process_transfer(output_index_value, output_checksum, checksum_code_hash);
+        return process_transfer(output_witness_index, output_checksum, checksum_code_hash);
     }
 
     // Append operation: Rule 13 - new checksum should be hasher.recover_from(previous_checksum).update(new_content_bytes)
-    process_append(output_index_value, output_checksum, input_checksum, checksum_code_hash)
+    process_append(output_witness_index, output_checksum, input_checksum, checksum_code_hash)
 }
 
 fn process_transfer(witness_index: u32, checksum: u32, checksum_code_hash: Option<&[u8; 32]>) -> Result<(), CKBFSError> {

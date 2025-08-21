@@ -17,6 +17,9 @@ pub enum CKBFSError {
     DuplicatedOutputs = 107,     // there can not be two same ckbfs cell in output
     InvalidAppend = 108,         // append data updates not meet
     InvalidTransfer = 109,       // transfer operation data updates not meet
+    InvalidWitnessHeader = 110,  // witness header does not match "CKBFS"
+    InvalidVersion = 111,        // witness version is not 0x03
+    InvalidPreviousPosition = 112, // previous position in witness does not match actual previous output
 }
 
 impl From<SysError> for CKBFSError {
