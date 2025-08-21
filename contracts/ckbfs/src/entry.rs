@@ -2,7 +2,6 @@ use alloc::{ffi::CString, format, vec, vec::Vec};
 use blake2b_ref::Blake2bBuilder;
 use ckb_std::high_level::{encode_hex, load_input_out_point, load_witness};
 use ckb_std::{
-    debug,
     ckb_constants::Source,
     ckb_types::core::ScriptHashType,
     high_level::{
@@ -162,7 +161,6 @@ fn validate_witness_previous_position(
 }
 
 fn process_creation(index: usize) -> Result<(), CKBFSError> {
-    debug!("process_creation!");
     let data = load_ckbfs_raw_data(index, Source::Output)?;
 
     let type_script_args = load_type_args(index, Source::Output);
@@ -180,7 +178,6 @@ fn process_creation(index: usize) -> Result<(), CKBFSError> {
     validate_witness_previous_position(witness_index as usize, &[0u8; 32], 0)?;
 
     if !validate_by_spawn_v3(witness_index, checksum, checksum_code_hash)? {
-        debug!("validate_by_spawn_v3 failed!");
         return Err(CKBFSError::ChecksumMismatch);
     }
 
