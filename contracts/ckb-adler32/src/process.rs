@@ -1,5 +1,6 @@
 use core::borrow::Borrow;
 
+use alloc::string::String;
 use alloc::{vec, vec::Vec};
 use ckb_std::ckb_constants::Source;
 use ckb_std::ckb_types::packed::Uint32Vec;
@@ -92,7 +93,11 @@ pub fn load_witnesses_for_ckbfs_v3(
                 } else {
                     Some(next_index)
                 },
-                recover_checksum: Some(recover_checksum),
+                recover_checksum: if recover_checksum == 0 {
+                    None
+                } else {
+                    Some(recover_checksum)
+                },
             })
         }
         CKBFS_V3_WITNESSES_INDEX::MiddleWitness(_) | CKBFS_V3_WITNESSES_INDEX::TailWitness(_) => {
