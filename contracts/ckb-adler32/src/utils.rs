@@ -61,6 +61,7 @@ pub fn load_witnesses_with_offset(
     })
 }
 
+
 #[no_mangle]
 pub fn validate(raw_content: &[u8], checksum_: u32) -> bool {
     let target_checksum = checksum(raw_content);

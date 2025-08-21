@@ -1,16 +1,14 @@
 use alloc::{ffi::CString, format, vec, vec::Vec};
 use blake2b_ref::Blake2bBuilder;
-use ckb_std::high_level::{encode_hex, load_input_out_point};
+use ckb_std::high_level::{encode_hex, load_input_out_point, load_witness};
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::core::ScriptHashType,
-    debug,
     high_level::{
         load_cell_data, load_cell_data_hash, load_cell_type, load_cell_type_hash, load_input,
         load_script, load_script_hash, QueryIter,
     },
 };
-use ckbfs_types::generated::ckbfs::Indexes;
 use core::fmt::Write;
 
 use molecule::prelude::Entity;
@@ -69,8 +67,8 @@ pub fn validate_type_id(type_id: &[u8; 32], output_index: usize) -> bool {
     }
 }
 
-pub fn validate_by_spawn(
-    witness_indexes: Vec<u32>,
+pub fn validate_by_spawn_v3(
+    witness_index: u32,
     checksum: u32,
     code_hash: Option<&[u8; 32]>,
 ) -> Result<bool, CKBFSError> {
@@ -81,15 +79,12 @@ pub fn validate_by_spawn(
         return Err(CKBFSError::NoChecksumHasherFound);
     }
 
-    let mode = u8_to_cstring(1u8);
-
-    let witness_indexes_packed: Indexes = witness_indexes.into();
-
-    let witness_indexes = encode_hex_0x(witness_indexes_packed.as_slice());
+    let mode = u8_to_cstring(3u8);
+    let witness_index_arg = encode_hex_0x(&witness_index.to_le_bytes());
     let checksum_arg = encode_hex_0x(&checksum.to_le_bytes());
     let exec_args = vec![
         mode.as_c_str(),
-        witness_indexes.as_c_str(),
+        witness_index_arg.as_c_str(),
         checksum_arg.as_c_str(),
     ];
 
@@ -99,8 +94,8 @@ pub fn validate_by_spawn(
     }
 }
 
-fn validate_by_spawn_with_recover(
-    witness_indexes: Vec<u32>,
+fn validate_by_spawn_v3_with_recover(
+    witness_index: u32,
     checksum: u32,
     recover: u32,
     code_hash: Option<&[u8; 32]>,
@@ -112,14 +107,13 @@ fn validate_by_spawn_with_recover(
         return Err(CKBFSError::NoChecksumHasherFound);
     }
 
-    let mode = u8_to_cstring(1u8);
-    let witness_indexes_packed: Indexes = witness_indexes.into();
-    let witness_indexes = encode_hex_0x(witness_indexes_packed.as_slice());
+    let mode = u8_to_cstring(3u8);
+    let witness_index_arg = encode_hex_0x(&witness_index.to_le_bytes());
     let checksum_arg = encode_hex_0x(&checksum.to_le_bytes());
     let recover_arg = encode_hex_0x(&recover.to_le_bytes());
     let exec_args = vec![
         mode.as_c_str(),
-        witness_indexes.as_c_str(),
+        witness_index_arg.as_c_str(),
         checksum_arg.as_c_str(),
         recover_arg.as_c_str(),
     ];
@@ -142,92 +136,49 @@ fn unpack_type_args(args: &[u8]) -> Result<([u8; 32], Option<&[u8; 32]>), CKBFSE
     return Ok((type_id, checksum_code_hash));
 }
 
+fn validate_witness_previous_position(
+    witness_index: usize,
+    expected_tx_hash: &[u8],
+    expected_witness_index: u32,
+) -> Result<(), CKBFSError> {
+    let head_witness = load_witness(witness_index, Source::Output)?;
+    
+    // Parse Head Witness according to RFC v3 specification
+    if head_witness.len() < 50 {
+        return Err(CKBFSError::LengthNotEnough);
+    }
+    
+    // Extract previous TX hash (bytes 6-37) and witness index (bytes 38-41)
+    let witness_previous_tx_hash: [u8; 32] = head_witness[6..38].try_into().unwrap();
+    let witness_previous_index = u32::from_le_bytes(head_witness[38..42].try_into().unwrap());
+    
+    // Validate previous position matches expected values
+    if witness_previous_tx_hash != expected_tx_hash || witness_previous_index != expected_witness_index {
+        return Err(CKBFSError::InvalidPreviousPosition);
+    }
+    
+    Ok(())
+}
+
 fn process_creation(index: usize) -> Result<(), CKBFSError> {
     let data = load_ckbfs_raw_data(index, Source::Output)?;
 
     let type_script_args = load_type_args(index, Source::Output);
     let (type_id, checksum_code_hash) = unpack_type_args(&type_script_args)?;
 
-    // vallidate unique id
+    // validate unique id
     if !validate_type_id(&type_id, index) {
         return Err(CKBFSError::InvalidTypeId);
     }
 
-    // initial index must have value
-    if data.indexes().is_empty() {
-        return Err(CKBFSError::InvalidInitialData);
-    }
-
-    let mut recover = None;
-
-    // if initial backlink is not empty, then it must contians a valid celldep
-    if data.backlinks().len() != 0 {
-        let ref_cell_index = QueryIter::new(load_cell_type, Source::CellDep)
-            .enumerate()
-            .position(|(_, cell_type)| {
-                if let Ok(current_script_code_hash) = load_script() {
-                    return cell_type.unwrap_or_default().code_hash().as_slice()
-                        == current_script_code_hash.as_slice();
-                }
-                false
-            });
-        if ref_cell_index.is_none() {
-            return Err(CKBFSError::InvalidInitialData);
-        }
-        let ref_data = load_ckbfs_raw_data(index, Source::CellDep)?;
-
-        // should always be one size longer
-        if data.backlinks().len() != (ref_data.backlinks().len() + 1) {
-            return Err(CKBFSError::InvalidInitialData);
-        }
-
-        recover = Some(u32::from_le_bytes(
-            ref_data.checksum().as_slice().try_into().unwrap(),
-        ));
-
-        // check backlink equality
-        for i in 0..ref_data.backlinks().len() {
-            if data
-                .backlinks()
-                .get(i)
-                .ok_or(CKBFSError::IndexOutOfBound)?
-                .as_slice()
-                != ref_data
-                    .backlinks()
-                    .get(i)
-                    .ok_or(CKBFSError::IndexOutOfBound)?
-                    .as_slice()
-            {
-                return Err(CKBFSError::InvalidInitialData);
-            }
-        }
-
-        debug!("Initial reference passed!");
-    }
-
     let checksum = u32::from_le_bytes(data.checksum().as_slice().try_into().unwrap());
-    let witness_indexes = data
-        .indexes()
-        .into_iter()
-        .map(|index| u32::from_le_bytes(index.as_slice().try_into().unwrap()))
-        .collect::<Vec<u32>>();
+    let witness_index = u32::from_le_bytes(data.index().as_slice().try_into().unwrap());
 
-    match recover {
-        Some(recover) => {
-            if !validate_by_spawn_with_recover(
-                witness_indexes,
-                checksum,
-                recover,
-                checksum_code_hash,
-            )? {
-                return Err(CKBFSError::ChecksumMismatch);
-            }
-        }
-        None => {
-            if !validate_by_spawn(witness_indexes, checksum, checksum_code_hash)? {
-                return Err(CKBFSError::ChecksumMismatch);
-            }
-        }
+    // For creation, previous position should be all zeros
+    validate_witness_previous_position(witness_index as usize, &[0u8; 32], 0)?;
+
+    if !validate_by_spawn_v3(witness_index, checksum, checksum_code_hash)? {
+        return Err(CKBFSError::ChecksumMismatch);
     }
 
     Ok(())
@@ -237,112 +188,62 @@ fn process_update(input_index: usize, output_index: usize) -> Result<(), CKBFSEr
     let input_data = load_ckbfs_raw_data(input_index, Source::Input)?;
     let output_data = load_ckbfs_raw_data(output_index, Source::Output)?;
 
-    // content-type can not be changed
-    if input_data.content_type().as_slice()[..] != output_data.content_type().as_slice()[..] {
+    let previous_output = load_input_out_point(input_index, Source::Input)?;
+
+    // Rule 14: content-type, filename, and Type args cannot be changed
+    if input_data.content_type().as_slice() != output_data.content_type().as_slice() {
         return Err(CKBFSError::InvalidFieldUpdate);
     }
 
-    // filename can not be changed
-    if input_data.filename().as_slice()[..] != output_data.filename().as_slice()[..] {
+    if input_data.filename().as_slice() != output_data.filename().as_slice() {
         return Err(CKBFSError::InvalidFieldUpdate);
     }
 
-    // checksum did not update, consider this is a transfer
+    // Validate that Type script args (including TypeID) are unchanged
+    let input_type_args = load_type_args(input_index, Source::Input);
+    let output_type_args = load_type_args(output_index, Source::Output);
+    if input_type_args != output_type_args {
+        return Err(CKBFSError::InvalidFieldUpdate);
+    }
+
+    let previous_tx_hash = previous_output.tx_hash();
+    let previous_witness_index = u32::from_le_bytes(input_data.index().as_slice().try_into().unwrap());
+    let output_witness_index = u32::from_le_bytes(output_data.index().as_slice().try_into().unwrap());
+
+    // Validate witness previous position
+    validate_witness_previous_position(output_witness_index as usize, previous_tx_hash.as_slice(), previous_witness_index)?;
 
     let type_script_args = load_script()?.args();
     let (_, checksum_code_hash) = unpack_type_args(type_script_args.as_slice())?;
+    
+    let input_checksum = u32::from_le_bytes(input_data.checksum().as_slice().try_into().unwrap());
+    let output_checksum = u32::from_le_bytes(output_data.checksum().as_slice().try_into().unwrap());
 
-    // index is none, this is a transfer. we must ensure the last backlink can be de-referenced
-    if output_data.indexes().is_empty() {
-        //checksum should not be updated
-        if output_data.checksum().as_slice() != input_data.checksum().as_slice() {
-            return Err(CKBFSError::InvalidFieldUpdate);
-        }
-
-        // a single part ckbfs cell with no backlinks. we need to ensure add a new backlink in to vec
-        if input_data.backlinks().len() == 0 {
-            if output_data.backlinks().len() != (input_data.backlinks().len() + 1) {
-                return Err(CKBFSError::InvalidTransfer);
-            }
-
-            // check tx hash matching
-            if output_data
-                .backlinks()
-                .get_unchecked(0)
-                .tx_hash()
-                .as_slice()[..]
-                != load_input_out_point(input_index, Source::Input)?
-                    .tx_hash()
-                    .as_slice()[..]
-            {
-                return Err(CKBFSError::InvalidTransfer);
-            }
-        } else {
-            // input backlinks are not empty.
-            // then we need to verify backlinks are totally equal
-            if input_data.backlinks().as_slice() != output_data.backlinks().as_slice() {
-                return Err(CKBFSError::InvalidFieldUpdate);
-            }
-        }
-
-        // all transfer rule verified, pass
-        return Ok(());
+    // Check if this is a transfer operation
+    if input_checksum == output_checksum {
+        // Transfer operation: Rule 16 - checksum cannot be updated
+        // Rule 15: Head witness should not contain content part bytes (only backlink info)
+        return process_transfer(output_witness_index, output_checksum, checksum_code_hash);
     }
 
-    // verify append op
-    let recover = u32::from_le_bytes(input_data.checksum().as_slice().try_into().unwrap());
+    // Append operation: Rule 13 - new checksum should be hasher.recover_from(previous_checksum).update(new_content_bytes)
+    process_append(output_witness_index, output_checksum, input_checksum, checksum_code_hash)
+}
 
-    // verify backlink
-    // - if input.backlinks <= 1 and input.index() == null, then it means we only have one parts and last backlink was already recorded,
-    // so no need to update backlinks;
-    // - if input.backlinks > 1, then it means we have multiparts; must verify a valid append
-
-    if !input_data.indexes().is_empty() || input_data.backlinks().len() > 1 {
-        // backlink should always be one size longer in APPEND
-        if output_data.backlinks().len() != (input_data.backlinks().len() + 1) {
-            return Err(CKBFSError::InvalidAppend);
-        }
-
-        // last backlink must be data matching
-        let last_backlink = output_data.backlinks().into_iter().last().unwrap();
-        if last_backlink.tx_hash().as_slice()[..]
-            != load_input_out_point(input_index, Source::Input)?
-                .tx_hash()
-                .as_slice()[..]
-            && last_backlink.indexes().as_slice() != input_data.indexes().as_slice()
-        {
-            return Err(CKBFSError::InvalidAppend);
-        }
-    }
-
-    // check backlink vec equality
-    for i in 0..input_data.backlinks().len() {
-        if output_data
-            .backlinks()
-            .get(i)
-            .ok_or(CKBFSError::IndexOutOfBound)?
-            .as_slice()
-            != input_data
-                .backlinks()
-                .get(i)
-                .ok_or(CKBFSError::IndexOutOfBound)?
-                .as_slice()
-        {
-            return Err(CKBFSError::InvalidAppend);
-        }
-    }
-
-    let checksum = u32::from_le_bytes(output_data.checksum().as_slice().try_into().unwrap());
-    let witness_indexes = output_data
-        .indexes()
-        .into_iter()
-        .map(|index| u32::from_le_bytes(index.as_slice().try_into().unwrap()))
-        .collect::<Vec<u32>>();
-
-    if !validate_by_spawn_with_recover(witness_indexes, checksum, recover, checksum_code_hash)? {
+fn process_transfer(witness_index: u32, checksum: u32, checksum_code_hash: Option<&[u8; 32]>) -> Result<(), CKBFSError> {
+    // For transfer, we validate that the witness structure is correct but no content is added
+    // The hasher will validate the witness structure according to RFC v3 transfer rules
+    if !validate_by_spawn_v3(witness_index, checksum, checksum_code_hash)? {
         return Err(CKBFSError::ChecksumMismatch);
     }
+    Ok(())
+}
 
+fn process_append(witness_index: u32, checksum: u32, recover_checksum: u32, checksum_code_hash: Option<&[u8; 32]>) -> Result<(), CKBFSError> {
+    // For append, we validate with recovery from previous checksum
+    if !validate_by_spawn_v3_with_recover(witness_index, checksum, recover_checksum, checksum_code_hash)? {
+        return Err(CKBFSError::ChecksumMismatch);
+    }
     Ok(())
 }
 
